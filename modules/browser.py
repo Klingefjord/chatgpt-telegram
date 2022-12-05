@@ -100,7 +100,7 @@ class Browser:
         await sleep(2)
 
         # the user should be logged in now. Otherwise, try again.
-        if self.__get_input_box() is None:
+        if await self.__get_input_box() is None:
             return self.login(attempt=attempt+1)
 
     async def send_message(self, message):
