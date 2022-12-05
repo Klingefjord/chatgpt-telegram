@@ -1,0 +1,10 @@
+name: chat
+channels:
+  - defaults
+dependencies:
+  - pip:
+    - playwright
+    - python-dotenv
+    - python-telegram-bot==20.0a6
+    - requests
+    - google-search-results
