@@ -1,4 +1,5 @@
 from asyncio import sleep
+import asyncio
 import os
 import time
 import typing
@@ -39,17 +40,17 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send message to OpenAI."""
 
     # get the user's browser instance, or create one if it doesn't exist
-    if update.effective_user.id not in browsers:
+    if update.effective_user.username not in browsers:
         await update.message.reply_text("Hang on, setting up your assistant...")
 
-        browser = Browser(update.effective_user.id)
-        browsers[update.effective_user.id] = browser
+        browser = Browser(update.effective_user.username)
+        browsers[update.effective_user.username] = browser
 
         await browser.connect()
         await browser.login()
 
     # get the response from the API
-    browser = browsers[update.effective_user.id]
+    browser = browsers[update.effective_user.username]
     await browser.send_message(update.message.text)
 
     # wait for the response to load
@@ -67,14 +68,14 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
 
-    if update.effective_user.id in browsers:
+    if update.effective_user.username in browsers:
         await update.message.reply_text("You already have an assistant. Use /reset to reset your assistant.")
         return
 
     await update.message.reply_text("Getting ready...")
 
-    browser = Browser(update.effective_user.id)
-    browsers[update.effective_user.id] = browser
+    browser = Browser(update.effective_user.username)
+    browsers[update.effective_user.username] = browser
 
     await browser.connect()
     await browser.login()
@@ -84,9 +85,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Reset the browser instance for the user."""
 
-    if update.effective_user.id in browsers:
+    if update.effective_user.username in browsers:
         update.message.reply_text("Resetting your assistant...")
-        await browsers[update.effective_user.id].login()
+        await browsers[update.effective_user.username].login()
         await update.message.reply_text("You are ready to start using Lydia. Say hello!")
     else:
         await update.message.reply_text("You don't have an assistant yet. Use /start to get started.")
@@ -116,13 +117,33 @@ async def error(update, context):
     print(f"Update {update} caused error {context.error}")
     logger.warning('Error "%s"', context.error)
 
+async def setup_browsers():
+    for user in os.getenv("ALLOWED_USERS").split(","):
+        print(f"Starting browser for {user}...")
+
+        # creat the browser
+        browser = Browser(user)
+
+        # log in the user to the chatGPT webpagte
+        await browser.connect()
+        await browser.login()
+        await sleep(5)
+
+        # cache the browser
+        browsers[user] = browser
+        print(f"Successfully started browser for {user}.")
 
 def main():
     # Handle messages    
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send))
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("reload", reset))
-    application.add_error_handler(error)
+    # application.add_error_handler(error)
+
+    # prepare browsers
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(setup_browsers())
+
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()

@@ -17,8 +17,8 @@ class Browser:
 
         play = await async_playwright().start()
         context = await play.chromium.launch_persistent_context(
-            user_data_dir="/tmp/playwright",
-            headless=True,
+            user_data_dir=f"/tmp/playwright_{self.user_id}",
+            headless=False,
         )
 
         self.page = await context.new_page()
@@ -62,6 +62,23 @@ class Browser:
     
         return response
 
+    async def click_through_modal(self):
+        """Click through the welcome modal, if it is present"""
+
+        while True:
+            next_button = self.page.locator("button", has_text='Next')
+            done_button = self.page.locator("button", has_text='Done')
+
+            if await done_button.is_visible():
+                await done_button.click()
+                break
+            elif await next_button.is_visible():
+                await next_button.click()
+            else:
+                break
+            
+            await sleep(0.5)
+
      
     async def __get_input_box(self):
         """Get the child textarea of `PromptTextarea__TextareaWrapper`"""
@@ -76,6 +93,7 @@ class Browser:
         await self.page.goto("https://chat.openai.com/")
         if await self.__get_input_box() is not None:
             print("Already logged in")
+            await self.click_through_modal()
             return
         
         print("Logging in")
@@ -102,6 +120,9 @@ class Browser:
         # the user should be logged in now. Otherwise, try again.
         if await self.__get_input_box() is None:
             return self.login(attempt=attempt+1)
+
+        # There might be a modal blocking the screen that we need to click through.
+        await self.click_through_modal()
 
     async def send_message(self, message):
         """Send a message to the webpage"""
