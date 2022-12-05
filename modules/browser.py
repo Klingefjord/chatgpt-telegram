@@ -18,7 +18,7 @@ class Browser:
         play = await async_playwright().start()
         context = await play.chromium.launch_persistent_context(
             user_data_dir=f"/tmp/playwright_{self.user_id}",
-            headless=False,
+            headless=True,
         )
 
         self.page = await context.new_page()
