@@ -18,7 +18,7 @@ class Browser:
         play = await async_playwright().start()
         context = await play.chromium.launch_persistent_context(
             user_data_dir="/tmp/playwright",
-            headless=False,
+            headless=True,
         )
 
         self.page = await context.new_page()
@@ -26,31 +26,40 @@ class Browser:
 
     async def get_last_message(self):
         """Get the latest message"""
-        page_elements = await self.page.query_selector_all("div[class*='ConversationItem__Message']")
-        last_element = page_elements[-1]
-        prose = last_element.query_selector(".prose")
+        page_elements = await self.page.query_selector_all("div[class*='prose']")
+        prose = page_elements[-1]
+        # prose = await last_element.query_selector(".prose")
+
+        # 
+        # the rest of this function tries to format code in the text
+        #
         try:
             code_blocks = await prose.query_selector_all("pre")
         except Exception as e:
-            response = "Server probably disconnected, try running /reset"
-        if len(code_blocks) > 0:
-            # get all children of prose and add them one by one to respons
-            response = ""
-            for child in await prose.query_selector_all("p,pre"):
-                print(child.get_property("tagName"))
-                if str(child.get_property("tagName")) == "PRE":
-                    code_container = await child.query_selector(
-                        "div[class*='CodeSnippet__CodeContainer']"
-                    )
-                    response += f"\n```\n{escape_markdown(code_container.inner_text(), version=2)}\n```"
-                else:
-                    # replace <code></code> formatting with ``
-                    text = child.inner_html()
-                    response += escape_markdown(text, version=2)
-            response = response.replace("<code\>", "`")
-            response = response.replace("</code\>", "`")
-        else:
-            response = escape_markdown(prose.inner_text(), version=2)
+            return "Server probably disconnected, try running /reset"
+
+        if len(code_blocks) == 0:
+            text = await prose.inner_text()
+            return escape_markdown(text, version=2)
+
+
+        response = ""
+        # get all children of prose and add them one by one to respons
+        for child in await prose.query_selector_all("p,pre"):
+            print(child.get_property("tagName"))
+            if str(child.get_property("tagName")) == "PRE":
+                code_container = await child.query_selector(
+                    "div[class*='CodeSnippet__CodeContainer']"
+                )
+                text = await code_container.inner_text()
+                response += f"\n```\n{escape_markdown(text, version=2)}\n```"
+            else:
+                # replace <code></code> formatting with ``
+                text = await child.inner_html()
+                response += escape_markdown(text, version=2)
+        response = response.replace("<code\>", "`")
+        response = response.replace("</code\>", "`")
+    
         return response
 
      
@@ -72,22 +81,23 @@ class Browser:
         print("Logging in")
 
         # click on the login button        
-        await self.page.locator("button", has_text='Log in').click()
+        login_button = self.page.locator("button", has_text='Log in')
+        await login_button.click()
         await sleep(1)
 
-        save = await self.page.locator("button[value='default']", has_text='Continue')
+        save = self.page.locator("button[value='default']", has_text='Continue')
 
         # fill in the email
-        email = await self.page.locator("input[id='username']")
+        email = self.page.locator("input[id='username']")
         await email.fill(os.getenv("OPEN_AI_USERNAME"))
         await save.click()
         await sleep(1)
 
         # fill in the password
-        password = await self.page.locator("input[id='password']")
+        password = self.page.locator("input[id='password']")
         await password.fill(os.getenv("OPEN_AI_PASSWORD"))
         await save.click()
-        await time.sleep(5)
+        await sleep(2)
 
         # the user should be logged in now. Otherwise, try again.
         if self.__get_input_box() is None:

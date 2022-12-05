@@ -1,3 +1,4 @@
+from asyncio import sleep
 import os
 import time
 import typing
@@ -26,11 +27,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 # set up app
 application = Application.builder().token(os.environ.get("TELEGRAM_API_KEY")).build()
-
-
 
 # dict of browser instances for each user.
 browsers: typing.Dict[str, Browser] = {}
@@ -41,7 +39,7 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send message to OpenAI."""
 
     # get the user's browser instance, or create one if it doesn't exist
-    if update.effective_user.username not in browsers:
+    if update.effective_user.id not in browsers:
         await update.message.reply_text("Hang on, setting up your assistant...")
 
         browser = Browser(update.effective_user.id)
@@ -51,11 +49,13 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await browser.login()
 
     # get the response from the API
+    browser = browsers[update.effective_user.id]
     await browser.send_message(update.message.text)
 
     # wait for the response to load
     await check_loading(update, browser)
     response = await browser.get_last_message()
+    response = "Sorry, something went wrong. Please try again later." if not response else response
 
     # send the response to the user
     await update.message.reply_text(
@@ -67,7 +67,7 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
 
-    if update.effective_user.username in browsers:
+    if update.effective_user.id in browsers:
         await update.message.reply_text("You already have an assistant. Use /reset to reset your assistant.")
         return
 
@@ -84,34 +84,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Reset the browser instance for the user."""
 
-    if update.effective_user.username in browsers:
+    if update.effective_user.id in browsers:
         update.message.reply_text("Resetting your assistant...")
-        await browsers[update.effective_user.username].login()
+        await browsers[update.effective_user.id].login()
         await update.message.reply_text("You are ready to start using Lydia. Say hello!")
     else:
         await update.message.reply_text("You don't have an assistant yet. Use /start to get started.")
 
 
 async def check_loading(update, browser):
-    # with a timeout of 90 seconds, created a while loop that checks if loading is done
-    loading = await browser.page.query_selector_all(
-        "button[class^='PromptTextarea__PositionSubmit']>.text-2xl"
-    )
-    # keep checking len(loading) until it's empty or 45 seconds have passed
-    await application.bot.send_chat_action(update.effective_chat.id, "typing")
     start_time = time.time()
-    while len(loading) > 0:
+
+    while True:
+        await application.bot.send_chat_action(update.effective_chat.id, "typing")
+
+        # check if the page is loading.
+        loading = await browser.page.query_selector_all("div[class*='prose'][class*='result-streaming']")
+
+        if not loading:
+            break
+
+        # time out after 90 seconds
         if time.time() - start_time > 90:
             break
-        time.sleep(0.5)
-        loading = await browser.page.query_selector_all(
-            "button[class^='PromptTextarea__PositionSubmit']>.text-2xl"
-        )
-        await application.bot.send_chat_action(update.effective_chat.id, "typing")
+
+        # check again in 0.5 seconds
+        await sleep(0.5)
 
 async def error(update, context):
     """Log Errors caused by Updates."""
-    logger.warning('Update cause error "%s"', context.error)
+    print(f"Update {update} caused error {context.error}")
+    logger.warning('Error "%s"', context.error)
+
 
 def main():
     # Handle messages    
