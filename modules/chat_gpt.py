@@ -99,7 +99,7 @@ class ChatGPT:
         """Get the child textarea of `PromptTextarea__TextareaWrapper`"""
         return await self.page.query_selector("textarea")
 
-    async def connect(self, headless=True, user_data_dir="/tmp/playwright"):
+    async def connect(self, headless=False, user_data_dir="/tmp/playwright"):
         """
         Connect to the webpage by creating a browser instance
         headless: whether to run the browser in headless mode
@@ -132,7 +132,6 @@ class ChatGPT:
 
             # check if we're already logged in
             if await self.__get_input_box() is not None:
-                await self.page.screenshot(path=f"login_2.png")
                 print("Already logged in")
                 await self.__click_through_modal()
                 return
@@ -157,7 +156,7 @@ class ChatGPT:
             password = self.page.locator("input[id='password']")
             await password.fill(self.openai_password)
             await save.click()
-            await sleep(2)
+            await sleep(1)
 
             # the user should be logged in now. Otherwise, try again.
             if await self.__get_input_box() is None:
@@ -176,6 +175,7 @@ class ChatGPT:
         self,
         message: str,
         typing_action: Coroutine = None,
+        typing_action_interval=5,
         poll_interval=0.5,
         timeout=90,
     ):
@@ -188,6 +188,8 @@ class ChatGPT:
         timeout: how long to wait for a response before giving up in seconds.
         """
 
+        print("Sending chatgpt message...")
+
         box = await self.__get_input_box()
         await box.click()
         await box.fill(message)
@@ -198,10 +200,14 @@ class ChatGPT:
         #
         start_time = time.time()
 
+        last_poll = start_time
+
         while True:
-            # simulate typing if needed
+            # simulate typing if needed.
             if typing_action is not None:
-                await typing_action()
+                if time.time() - last_poll > typing_action_interval:
+                    last_poll = time.time()
+                    await typing_action()
 
             # check if the page is loading.
             loading = await self.page.query_selector_all(
@@ -215,8 +221,10 @@ class ChatGPT:
             if time.time() - start_time > timeout:
                 break
 
-            # check again in 0.5 seconds
+            # check again in after the piolling interval.
             await sleep(poll_interval)
+
+        print(f"Got chatgpt response. Took ", time.time() - start_time, " seconds.")
 
         # return the response
         return await self.__get_response()
