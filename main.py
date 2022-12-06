@@ -153,7 +153,7 @@ def main():
     # Handle messages
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send))
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("reload", reset))
+    application.add_handler(CommandHandler("reset", reset))
     # application.add_error_handler(error)
 
     # prepare browsers
