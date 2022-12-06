@@ -81,18 +81,14 @@ class ChatGPT:
     async def __click_through_modal(self):
         """Click through the welcome modal if it is present"""
 
-        await self.page.screenshot(path=f"login_10.png")
-
         while True:
             next_button = self.page.locator("button", has_text="Next")
             done_button = self.page.locator("button", has_text="Done")
 
             if await done_button.is_visible():
-                await self.page.screenshot(path=f"login_11.png")
                 await done_button.click()
                 break
             elif await next_button.is_visible():
-                await self.page.screenshot(path=f"login_12.png")
                 await next_button.click()
             else:
                 break
@@ -130,62 +126,51 @@ class ChatGPT:
         if not self.ready:
             raise Exception("Browser is not ready, use .connect() first")
 
-        # navigate to the webpage
-        await self.page.goto("https://chat.openai.com/")
+        try:
+            # navigate to the webpage
+            await self.page.goto("https://chat.openai.com/")
 
-        await self.page.screenshot(path=f"login_1.png")
+            # check if we're already logged in
+            if await self.__get_input_box() is not None:
+                await self.page.screenshot(path=f"login_2.png")
+                print("Already logged in")
+                await self.__click_through_modal()
+                return
 
-        # check if we're already logged in
-        if await self.__get_input_box() is not None:
-            await self.page.screenshot(path=f"login_2.png")
-            print("Already logged in")
+            print("Logging in, attempt ", attempt)
+            await sleep(1)
+
+            # click on the login button
+            login_button = self.page.locator("button", has_text="Log in")
+            await login_button.click()
+            await sleep(1)
+
+            save = self.page.locator("button[value='default']", has_text="Continue")
+
+            # fill in the email
+            email = self.page.locator("input[id='username']")
+            await email.fill(self.openai_username)
+            await save.click()
+            await sleep(1)
+
+            # fill in the password
+            password = self.page.locator("input[id='password']")
+            await password.fill(self.openai_password)
+            await save.click()
+            await sleep(2)
+
+            # the user should be logged in now. Otherwise, try again.
+            if await self.__get_input_box() is None:
+                return await self.login(attempt=attempt + 1)
+
+            # There might be a modal blocking the screen that we need to click through.
             await self.__click_through_modal()
-            return
 
-        print("Logging in, attempt ", attempt)
-        await sleep(1)
-
-        await self.page.screenshot(path=f"login_3.png")
-
-        # click on the login button
-        login_button = self.page.locator("button", has_text="Log in")
-        await login_button.click()
-        await sleep(1)
-
-        await self.page.screenshot(path=f"login_4.png")
-
-        save = self.page.locator("button[value='default']", has_text="Continue")
-
-        await self.page.screenshot(path=f"login_5.png")
-
-        # fill in the email
-        email = self.page.locator("input[id='username']")
-        await email.fill(self.openai_username)
-        await save.click()
-        await sleep(1)
-
-        await self.page.screenshot(path=f"login_6.png")
-
-        # fill in the password
-        password = self.page.locator("input[id='password']")
-        await password.fill(self.openai_password)
-        await save.click()
-        await sleep(2)
-
-        await self.page.screenshot(path=f"login_7.png")
-
-        # the user should be logged in now. Otherwise, try again.
-        if await self.__get_input_box() is None:
-            return self.login(attempt=attempt + 1)
-
-        await self.page.screenshot(path=f"login_8.png")
-
-        # There might be a modal blocking the screen that we need to click through.
-        await self.__click_through_modal()
-
-        await self.page.screenshot(path=f"login_9.png")
-
-        self.is_logged_in = True
+            self.is_logged_in = True
+        except Exception as e:
+            print("Error logging in. Taking screenshot.", e)
+            await self.page.screenshot(path=f"login_fail_{attempt}.png")
+            return await self.login(attempt=attempt + 1)
 
     async def send_message(
         self,

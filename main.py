@@ -113,9 +113,12 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
 
-async def error(update, context):
+async def error(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log Errors caused by Updates."""
     print(f"Update {update} caused error {context.error}")
+    await update.message.reply_text(
+        "Sorry, something went wrong. Please try again later. You can try restart your assistant with /reset."
+    )
     logger.warning('Error "%s"', context.error)
 
 
@@ -130,9 +133,13 @@ async def setup_browsers():
         )
 
         # log in the user to the chatGPT webpage
-        await browser.connect(user_data_dir=f"/tmp/playwright_{user}")
-        await browser.login()
-        await sleep(5)
+        try:
+            await browser.connect(user_data_dir=f"/tmp/playwright_{user}")
+            await browser.login()
+            await sleep(5)
+        except Exception as e:
+            print(f"Error starting browser for {user}: {e}")
+            continue
 
         # cache the browser
         browsers[user] = browser
