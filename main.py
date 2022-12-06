@@ -1,7 +1,6 @@
 from asyncio import sleep
 import asyncio
 import os
-import time
 import typing
 import telegram
 import logging
@@ -145,7 +144,7 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send))
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("reset", reset))
-    # application.add_error_handler(error)
+    application.add_error_handler(error)
 
     # prepare browsers
     loop = asyncio.get_event_loop()
