@@ -99,17 +99,17 @@ class ChatGPT:
         """Get the child textarea of `PromptTextarea__TextareaWrapper`"""
         return await self.page.query_selector("textarea")
 
-    async def connect(self, headless=False, user_data_dir="/tmp/playwright"):
+    async def connect(self, user_data_dir="/tmp/playwright"):
         """
         Connect to the webpage by creating a browser instance
-        headless: whether to run the browser in headless mode
         """
 
+        headed = os.getenv("HEADED", "False") == "True"
         play = await async_playwright().start()
         context = await play.chromium.launch_persistent_context(
             user_data_dir=user_data_dir,
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36",
-            headless=headless,
+            headless=(not headed),
         )
 
         self.page = await context.new_page()
