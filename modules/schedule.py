@@ -45,6 +45,7 @@ class Scheduler:
         Time: Friday 12-01-01 19:00
 
         ----
+        
 
         Time: {now}
         """
