@@ -111,8 +111,8 @@ async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     browser = browsers[update.effective_user.username]
     message = update.message.text.replace("/browse", "")
 
-    await application.bot.send_chat_action(update.effective_chat.id, "typing")
-    response = await get_web_response(browser, message)
+    response = await google.google(browser, message)
+
     await update.message.reply_text(
         response, parse_mode=telegram.constants.ParseMode.MARKDOWN_V2
     )

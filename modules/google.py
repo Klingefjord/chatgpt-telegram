@@ -22,9 +22,6 @@ class Google:
         if "'I'm sorry" in text:
             cue_count += 1
 
-        if "large language model" in text:
-            cue_count += 1
-
         if "training data":
             cue_count += 1
 
@@ -64,7 +61,7 @@ class Google:
         #         await typing_action()
 
         # search google for the query
-        results = self.__google_search(response)
+        results = self.__google_search(text)
 
         # create a prompt for summarizing the google result
         prompt = f"""
