@@ -56,7 +56,11 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # wait for the response to load
     await check_loading(update, browser)
     response = await browser.get_last_message()
-    response = "Sorry, something went wrong. Please try again later." if not response else response
+    response = (
+        "Sorry, something went wrong. Please try again later."
+        if not response
+        else response
+    )
 
     # send the response to the user
     await update.message.reply_text(
@@ -69,7 +73,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
 
     if update.effective_user.username in browsers:
-        await update.message.reply_text("You already have an assistant. Use /reset to reset your assistant.")
+        await update.message.reply_text(
+            "You already have an assistant. Use /reset to reset your assistant."
+        )
         return
 
     await update.message.reply_text("Getting ready...")
@@ -81,6 +87,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await browser.login()
     await update.message.reply_text("You are ready to start using Lydia. Say hello!")
 
+
 @auth()
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Reset the browser instance for the user."""
@@ -88,9 +95,13 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user.username in browsers:
         update.message.reply_text("Resetting your assistant...")
         await browsers[update.effective_user.username].login()
-        await update.message.reply_text("You are ready to start using Lydia. Say hello!")
+        await update.message.reply_text(
+            "You are ready to start using Lydia. Say hello!"
+        )
     else:
-        await update.message.reply_text("You don't have an assistant yet. Use /start to get started.")
+        await update.message.reply_text(
+            "You don't have an assistant yet. Use /start to get started."
+        )
 
 
 async def check_loading(update, browser):
@@ -100,7 +111,9 @@ async def check_loading(update, browser):
         await application.bot.send_chat_action(update.effective_chat.id, "typing")
 
         # check if the page is loading.
-        loading = await browser.page.query_selector_all("div[class*='prose'][class*='result-streaming']")
+        loading = await browser.page.query_selector_all(
+            "div[class*='prose'][class*='result-streaming']"
+        )
 
         if not loading:
             break
@@ -112,10 +125,12 @@ async def check_loading(update, browser):
         # check again in 0.5 seconds
         await sleep(0.5)
 
+
 async def error(update, context):
     """Log Errors caused by Updates."""
     print(f"Update {update} caused error {context.error}")
     logger.warning('Error "%s"', context.error)
+
 
 async def setup_browsers():
     for user in os.getenv("ALLOWED_USERS").split(","):
@@ -133,8 +148,9 @@ async def setup_browsers():
         browsers[user] = browser
         print(f"Successfully started browser for {user}.")
 
+
 def main():
-    # Handle messages    
+    # Handle messages
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send))
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("reload", reset))
@@ -143,7 +159,6 @@ def main():
     # prepare browsers
     loop = asyncio.get_event_loop()
     loop.run_until_complete(setup_browsers())
-
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()

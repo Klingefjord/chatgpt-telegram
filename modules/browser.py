@@ -1,4 +1,3 @@
-
 import os
 import time
 from anyio import sleep
@@ -6,8 +5,8 @@ from playwright.async_api import async_playwright
 from telegram import Update
 from telegram.helpers import escape, escape_markdown
 
-class Browser:
 
+class Browser:
     def __init__(self, user_id: str) -> None:
         """Create a browser instance for a user"""
         self.user_id = user_id
@@ -18,11 +17,11 @@ class Browser:
         play = await async_playwright().start()
         context = await play.chromium.launch_persistent_context(
             user_data_dir=f"/tmp/playwright_{self.user_id}",
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36",
             headless=True,
         )
 
         self.page = await context.new_page()
-
 
     async def get_last_message(self):
         """Get the latest message"""
@@ -30,7 +29,7 @@ class Browser:
         prose = page_elements[-1]
         # prose = await last_element.query_selector(".prose")
 
-        # 
+        #
         # the rest of this function tries to format code in the text
         #
         try:
@@ -41,7 +40,6 @@ class Browser:
         if len(code_blocks) == 0:
             text = await prose.inner_text()
             return escape_markdown(text, version=2)
-
 
         response = ""
         # get all children of prose and add them one by one to respons
@@ -59,15 +57,17 @@ class Browser:
                 response += escape_markdown(text, version=2)
         response = response.replace("<code\>", "`")
         response = response.replace("</code\>", "`")
-    
+
         return response
 
     async def click_through_modal(self):
         """Click through the welcome modal, if it is present"""
 
+        print("Clicking through modal...")
+
         while True:
-            next_button = self.page.locator("button", has_text='Next')
-            done_button = self.page.locator("button", has_text='Done')
+            next_button = self.page.locator("button", has_text="Next")
+            done_button = self.page.locator("button", has_text="Done")
 
             if await done_button.is_visible():
                 await done_button.click()
@@ -76,10 +76,9 @@ class Browser:
                 await next_button.click()
             else:
                 break
-            
-            await sleep(0.5)
 
-     
+            await sleep(1)
+
     async def __get_input_box(self):
         """Get the child textarea of `PromptTextarea__TextareaWrapper`"""
         return await self.page.query_selector("textarea")
@@ -89,21 +88,24 @@ class Browser:
         if attempt > 2:
             raise Exception("Failed to login")
 
-        # check if we're already logged in
+        # navigate to the webpage
         await self.page.goto("https://chat.openai.com/")
+
+        # check if we're already logged in
         if await self.__get_input_box() is not None:
             print("Already logged in")
             await self.click_through_modal()
             return
-        
-        print("Logging in")
 
-        # click on the login button        
-        login_button = self.page.locator("button", has_text='Log in')
+        print("Logging in, attempt ", attempt + 1)
+        await sleep(1)
+
+        # click on the login button
+        login_button = self.page.locator("button", has_text="Log in")
         await login_button.click()
         await sleep(1)
 
-        save = self.page.locator("button[value='default']", has_text='Continue')
+        save = self.page.locator("button[value='default']", has_text="Continue")
 
         # fill in the email
         email = self.page.locator("input[id='username']")
@@ -119,7 +121,7 @@ class Browser:
 
         # the user should be logged in now. Otherwise, try again.
         if await self.__get_input_box() is None:
-            return self.login(attempt=attempt+1)
+            return self.login(attempt=attempt + 1)
 
         # There might be a modal blocking the screen that we need to click through.
         await self.click_through_modal()
