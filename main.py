@@ -7,7 +7,7 @@ import telegram
 import logging
 import dotenv
 import nest_asyncio
-from modules.browser import Browser
+from modules.chat_gpt import ChatGPT
 from utils.auth import auth
 from telegram import Update
 from telegram.ext import (
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 application = Application.builder().token(os.environ.get("TELEGRAM_API_KEY")).build()
 
 # dict of browser instances for each user.
-browsers: typing.Dict[str, Browser] = {}
+browsers: typing.Dict[str, ChatGPT] = {}
 
 
 @auth()
@@ -43,19 +43,24 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user.username not in browsers:
         await update.message.reply_text("Hang on, setting up your assistant...")
 
-        browser = Browser(update.effective_user.username)
+        browser = ChatGPT(
+            openai_username=os.getenv("OPEN_AI_USERNAME"),
+            openai_password=os.getenv("OPEN_AI_PASSWORD"),
+        )
         browsers[update.effective_user.username] = browser
 
-        await browser.connect()
+        await browser.connect(
+            user_data_dir=f"/tmp/playwright_{update.effective_user.username}"
+        )
         await browser.login()
 
-    # get the response from the API
     browser = browsers[update.effective_user.username]
-    await browser.send_message(update.message.text)
 
-    # wait for the response to load
-    await check_loading(update, browser)
-    response = await browser.get_last_message()
+    async def typing():
+        await application.bot.send_chat_action(update.effective_chat.id, "typing")
+
+    # get the response from the API
+    response = await browser.send_message(update.message.text, typing_action=typing)
     response = (
         "Sorry, something went wrong. Please try again later."
         if not response
@@ -80,10 +85,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     await update.message.reply_text("Getting ready...")
 
-    browser = Browser(update.effective_user.username)
+    browser = ChatGPT(
+        openai_username=os.getenv("OPEN_AI_USERNAME"),
+        openai_password=os.getenv("OPEN_AI_PASSWORD"),
+    )
     browsers[update.effective_user.username] = browser
 
-    await browser.connect()
+    await browser.connect(
+        user_data_dir=f"/tmp/playwright_{update.effective_user.username}"
+    )
     await browser.login()
     await update.message.reply_text("You are ready to start using Lydia. Say hello!")
 
@@ -104,28 +114,6 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
 
-async def check_loading(update, browser):
-    start_time = time.time()
-
-    while True:
-        await application.bot.send_chat_action(update.effective_chat.id, "typing")
-
-        # check if the page is loading.
-        loading = await browser.page.query_selector_all(
-            "div[class*='prose'][class*='result-streaming']"
-        )
-
-        if not loading:
-            break
-
-        # time out after 90 seconds
-        if time.time() - start_time > 90:
-            break
-
-        # check again in 0.5 seconds
-        await sleep(0.5)
-
-
 async def error(update, context):
     """Log Errors caused by Updates."""
     print(f"Update {update} caused error {context.error}")
@@ -137,10 +125,13 @@ async def setup_browsers():
         print(f"Starting browser for {user}...")
 
         # creat the browser
-        browser = Browser(user)
+        browser = ChatGPT(
+            openai_username=os.getenv("OPEN_AI_USERNAME"),
+            openai_password=os.getenv("OPEN_AI_PASSWORD"),
+        )
 
-        # log in the user to the chatGPT webpagte
-        await browser.connect()
+        # log in the user to the chatGPT webpage
+        await browser.connect(user_data_dir=f"/tmp/playwright_{user}")
         await browser.login()
         await sleep(5)
 
