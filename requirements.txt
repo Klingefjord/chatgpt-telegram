@@ -4,3 +4,6 @@ requests~=2.28.1
 google-search-results
 nest-asyncio==1.5.6
 python-telegram-bot==20.0a6
+langchain==0.0.30
+openai==0.25.0
+python-telegram-bot[job-queue]==20.0a6

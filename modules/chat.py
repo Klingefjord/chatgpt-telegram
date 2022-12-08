@@ -1,12 +1,27 @@
+from abc import ABC, abstractmethod
+from functools import partial
 import os
 import time
-from typing import Coroutine
+import asyncio
 from anyio import sleep
 from playwright.async_api import async_playwright, ElementHandle
+from typing import Coroutine
 from telegram.helpers import escape_markdown
+from langchain import OpenAI, LLMChain, PromptTemplate
+from langchain.chains.conversation.memory import ConversationBufferMemory
 
 
-class ChatGPT:
+class Chat(ABC):
+    """The interface of a chatbot"""
+
+    @abstractmethod
+    async def send_message(
+        self, message: str, typing: Coroutine = None, **kwargs
+    ) -> str:
+        raise NotImplementedError()
+
+
+class ChatGPTChat(Chat):
     """
     ChatGPT API
 
@@ -137,7 +152,7 @@ class ChatGPT:
                 return
 
             print("Logging in, attempt ", attempt)
-            await sleep(1)
+            await sleep(3)
 
             # click on the login button
             login_button = self.page.locator("button", has_text="Log in")
@@ -156,11 +171,9 @@ class ChatGPT:
             password = self.page.locator("input[id='password']")
             await password.fill(self.openai_password)
             await save.click()
-            await sleep(1)
 
-            # the user should be logged in now. Otherwise, try again.
-            if await self.__get_input_box() is None:
-                return await self.login(attempt=attempt + 1)
+            # wait for us to be logged in
+            self.page.locator("textarea").wait_for_element_state("visible")
 
             # There might be a modal blocking the screen that we need to click through.
             await self.__click_through_modal()
@@ -174,10 +187,11 @@ class ChatGPT:
     async def send_message(
         self,
         message: str,
-        typing_action: Coroutine = None,
-        typing_action_interval=5,
+        typing: Coroutine = None,
+        typing_interval=5,
         poll_interval=0.5,
         timeout=90,
+        **kwargs,
     ):
         """
         Send a message to the webpage.
@@ -204,10 +218,10 @@ class ChatGPT:
 
         while True:
             # simulate typing if needed.
-            if typing_action is not None:
-                if time.time() - last_poll > typing_action_interval:
+            if typing is not None:
+                if time.time() - last_poll > typing_interval:
                     last_poll = time.time()
-                    await typing_action()
+                    await typing()
 
             # check if the page is loading.
             loading = await self.page.query_selector_all(
@@ -228,3 +242,53 @@ class ChatGPT:
 
         # return the response
         return await self.__get_response()
+
+
+class LangChainChat(Chat):
+    chain: LLMChain
+    """The LLMChain that is used to generate responses"""
+
+    def __init__(self, username: str, chat_history: str = None) -> None:
+        template = f"""You are a chatbot having a conversation with {username}. You try to give as accurate and thruthful answers as possible. 
+        You cannot answer questions that need to know what date it is currently. 
+        
+        You are not allowed to browse the internet. You don't knw what date it is. You cannot remind the user or perform actions on her behalf.
+
+        If you don't know the answer, you can ask the human for more information or earnestly tell {username} that you don't know the answer. 
+        If you cannot perform the requested action, clearly state so. If the action needs internet, suggest that the user use the /browse command. If the action requested needs scheduling, suggest the user use /schedule.
+
+        {{chat_history}}
+        {username}: {{human_input}}
+        Chatbot:"""
+
+        prompt = PromptTemplate(
+            input_variables=["chat_history", "human_input"],
+            template=template,
+        )
+
+        memory = ConversationBufferMemory(memory_key="chat_history", buffer="")
+
+        self.chain = LLMChain(
+            llm=OpenAI(max_tokens=1024),
+            prompt=prompt,
+            verbose=True,
+            memory=memory,
+        )
+
+    async def call(self, message: str) -> str:
+        """Async wrapper around the LLM"""
+        function = partial(self.chain.predict, human_input=message)
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, function)
+
+        return response
+
+    async def send_message(
+        self,
+        message: str,
+        typing: Coroutine = None,
+        **kwargs,
+    ):
+        await typing()
+        response = await self.call(message)
+        return response

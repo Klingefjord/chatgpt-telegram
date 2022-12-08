@@ -1,10 +1,9 @@
 from typing import Coroutine
 from serpapi import GoogleSearch
-import os
 import json
 import dotenv
 
-from modules.chat_gpt import ChatGPT
+from modules.chat import Chat
 
 dotenv.load_dotenv()
 
@@ -19,7 +18,7 @@ class Google:
         text = text.lower()
 
         cue_count = 0
-        if "'I'm sorry" in text:
+        if "i'm sorry" in text:
             cue_count += 1
 
         if "training data":
@@ -38,30 +37,30 @@ class Google:
         return False
 
     async def google(
-        self, text: str, api: ChatGPT, typing_action: Coroutine = None
+        self, text: str, chat: Chat, typing_action: Coroutine = None
     ) -> str:
         """Get the response from the webpage, summarized by the ChatGPT api"""
 
         if typing_action:
             await typing_action()
 
-        #     response = await api.send_message(
-        #         f"""
-        # If I ask you "{text}" , and you didn't know the answer but had access to google, what would you search for? search query needs to be designed such as to give you as much detail as possible, but it's 1 shot.
-        # Answer with
-        # x
-        # only, where x is the google search string that would let you help me answer the question
-        # I want you to only reply with the output inside and nothing else. Do no write explanations or anything else. Just the query
-        #     """
-        #     )
-        #     print(f"Clean response from chatGPT {response}")
+        response = await chat.send_message(
+            f"""
+        If I ask you "{text}" , and you didn't know the answer but had access to google, what would you search for? search query needs to be designed such as to give you as much detail as possible.
+        Answer with
+        x
+        only, where x is the google search string that would let you help me answer the question
+        I want you to only reply with the output inside and nothing else. Do no write explanations or anything else. Just the query
+            """
+        )
+        print(f"Clean response from chatGPT {response}")
 
-        #     # send the google search query to Google:
-        #     if typing_action:
-        #         await typing_action()
+        # send the google search query to Google:
+        if typing_action:
+            await typing_action()
 
         # search google for the query
-        results = self.__google_search(text)
+        results = self.__google_search(response)
 
         # create a prompt for summarizing the google result
         prompt = f"""
@@ -69,13 +68,12 @@ class Google:
         \"\"\"
         {results}
         \"\"\"
-        Provide a summary of the new facts in a code block, in markdown format
-        Then in another code block, answer the question {text} with the new facts you just learned
+        Provide a answer to the following, cleanly formatted:
+        
+        {text}
         """
-        response = await api.send_message(prompt, typing_action=typing_action)
 
-        # return the response from chatGPT
-        return response
+        return await chat.send_message(prompt, typing_action=typing_action)
 
     def __google_search(self, query):
         """Perform the google search using SerpAPI"""
@@ -83,7 +81,7 @@ class Google:
         params = {
             "q": query,
             "hl": "en",
-            "gl": "us",
+            "gl": "de",
             "api_key": self.api_key,
         }
 
@@ -107,6 +105,9 @@ class Google:
                 A: {question_and_answer.get('answer', 'NA')}
                 """
 
+        if "answer_box" in response_dict:
+            textual_response += f"Answer Box: {json.dumps(response_dict['answer_box'])}"
+
         if "organic_results" in response_dict:
             textual_response += "Organic Results:\n"
             for organic_result in response_dict["organic_results"]:
@@ -115,12 +116,13 @@ class Google:
             Snippet: {organic_result.get('snippet', 'NA')}
             """
 
-        if "answer_box" in response_dict:
-            textual_response += f"Answer Box: {json.dumps(response_dict['answer_box'])}"
-
         if "knowledge_graph" in response_dict:
             textual_response += (
                 f"Knowledge Graph: {json.dumps(response_dict['knowledge_graph'])}"
             )
 
-        return textual_response
+        return (
+            textual_response[:500] + "..."
+            if len(textual_response) > 500
+            else textual_response
+        )
