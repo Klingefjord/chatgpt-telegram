@@ -1,11 +1,9 @@
 from typing import Coroutine
 from serpapi import GoogleSearch
+from modules.chat import Chat
+from telegram.ext import ContextTypes
 import json
 import dotenv
-
-from modules.chat import Chat
-
-from telegram.ext import ContextTypes
 
 dotenv.load_dotenv()
 

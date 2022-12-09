@@ -2,7 +2,6 @@ from functools import partial
 import asyncio
 from typing import Coroutine
 from langchain import LLMChain, OpenAI, PromptTemplate
-from pydantic import BaseModel
 from telegram.ext import ContextTypes
 from modules.memory import CHAT_KEY, SUMMARY_KEY, AutoSummaryMemory
 

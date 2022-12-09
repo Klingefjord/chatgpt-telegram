@@ -1,9 +1,8 @@
 from typing import Any, Dict, List
-from langchain import BasePromptTemplate, LLMChain, OpenAI, PromptTemplate
+from langchain import BasePromptTemplate, LLMChain, OpenAI
 from langchain.chains.conversation.prompt import SUMMARY_PROMPT
 from langchain.chains.base import Memory
-from pydantic import BaseModel
-from telegram.ext import ContextTypes, PicklePersistence
+from telegram.ext import ContextTypes
 
 # the history of the conversation, stored as a string as per memory.
 CHAT_KEY = "history"
