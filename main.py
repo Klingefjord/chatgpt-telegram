@@ -78,7 +78,9 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 @auth()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
-    await update.message.reply_text("You are ready to start using Lydia. Say hello!")
+    await update.message.reply_text(
+        "You are ready to start using Assistant. Say hello!"
+    )
 
 
 @auth()
@@ -96,7 +98,9 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # create a new chat instance
         chats[username] = APIChat(context=None, username=username)
 
-    await update.message.reply_text("You are ready to start using Lydia. Say hello!")
+    await update.message.reply_text(
+        "You are ready to start using Assistant. Say hello!"
+    )
 
 
 @auth()
