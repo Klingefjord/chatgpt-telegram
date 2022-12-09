@@ -38,7 +38,7 @@ os.environ["TZ"] = "Europe/Berlin"
 application = (
     Application.builder()
     .token(os.environ.get("TELEGRAM_API_KEY"))
-    .persistence(PicklePersistence(filepath="./data/data"))
+    .persistence(PicklePersistence(filepath="./data/data.pickle", update_interval=5))
     .defaults(defaults=Defaults(tzinfo=pytz.timezone(os.environ["TZ"])))
     .build()
 )
@@ -56,7 +56,7 @@ scheduler = Scheduler(application.job_queue)
 @auth()
 async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send message to OpenAI"""
-    chat = get_chat(update)
+    chat = get_chat(update, context)
 
     async def typing():
         await application.bot.send_chat_action(update.effective_chat.id, "typing")
@@ -105,7 +105,7 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 @auth()
 async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Reset the browser instance for the user."""
-    chat = get_chat(update)
+    chat = get_chat(update, context)
 
     async def typing():
         await application.bot.send_chat_action(update.effective_chat.id, "typing")
@@ -146,13 +146,13 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-def get_chat(update: Update) -> Chat:
+def get_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Chat:
     """Get the chat instance for the user."""
     username = update.effective_user.username
 
     # create a chat instance for the user if not already present
     if username not in chats:
-        chats[username] = Chat()
+        chats[username] = Chat(context)
 
     return chats[username]
 
