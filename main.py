@@ -28,9 +28,6 @@ from telegram.ext import (
     filters,
 )
 
-# set the OpenAI API key
-print(os.getenv("OPENAI_API_KEY"))
-
 # logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
