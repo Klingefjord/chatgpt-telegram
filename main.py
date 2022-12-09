@@ -38,7 +38,7 @@ os.environ["TZ"] = "Europe/Berlin"
 application = (
     Application.builder()
     .token(os.environ.get("TELEGRAM_API_KEY"))
-    .persistence(PicklePersistence(filepath="./data/data.pickle", update_interval=5))
+    .persistence(PicklePersistence(filepath="./data/data.pickle"))
     .defaults(defaults=Defaults(tzinfo=pytz.timezone(os.environ["TZ"])))
     .build()
 )
