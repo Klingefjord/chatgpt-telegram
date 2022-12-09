@@ -77,7 +77,7 @@ class AutoSummaryMemory(Memory, BaseModel):
             raise ValueError(f"One output key expected, got {outputs.keys()}")
 
         human = "Human: " + inputs[prompt_input_key]
-        ai = "AI: " + outputs[list(outputs.keys())[0]]
+        ai = "Assistant: " + outputs[list(outputs.keys())[0]]
 
         # add the new lines to the buffer.
         self.buffer += "\n" + "\n".join([human, ai])

@@ -1,9 +1,3 @@
-# I'm sorry, but I am not capable of checking in with you at a specific time.
-# I am a text-based AI assistant and do not have the ability to check in with you in real-time.
-# Is there something specific you need help with or have a question about?
-# I would be happy to assist you to the best of my abilities.
-
-
 import asyncio
 from datetime import datetime, timedelta
 from functools import partial
@@ -27,9 +21,13 @@ class Scheduler:
         self.response_llm = OpenAI(max_tokens=128, model_name="text-curie-001")
 
     @staticmethod
-    async def callback(context: ContextTypes.DEFAULT_TYPE):
+    async def callback(context: CallbackContext):
         job = context.job
-        await context.bot.send_message(job.chat_id, text=job.data)
+
+        await context.bot.send_message(
+            job.chat_id,
+            text=job.data,
+        )
 
     async def call(self, llm: OpenAI, prompt: str) -> str:
         """Async wrapper around a LLM"""
@@ -42,7 +40,6 @@ class Scheduler:
     async def schedule(
         self,
         text: str,
-        chat: Chat,
         username: str,
         user_id: str,
         chat_id: str,
@@ -56,11 +53,25 @@ class Scheduler:
         prompt = f"""You are an excellent message parser. Parse a message to {username} based on a query.
         The response needs to be a JSON object and contain two keys, "time" and "message".
 
+        "time" is formatted using "A %m-%d-%y %H:%M".
+
         EXAMPLE
-        query: "Remind me to book a dinner for Ellie's birthday on Friday. Time right now is {now}."
+        query: "Remind me to book a dinner for Ellie's birthday on Friday. Time right now is Thursday 12-01-20 17:00"
         response: {"{"}
-            "time": "Friday 12-01-01 19:00",
+            "time": "Friday 12-01-21 19:00",
             "message": "Hi {username}! It's time to book a dinner for Ellie's birthday."
+        {"}"}
+
+        query: "Check in with me at 3pm. Time right now is Wednesday 01-20-18 08:22."
+        response: {"{"}
+            "time": "Friday 01-20-18 15:00",
+            "message": "Hi {username}, how are you doing?"
+        {"}"}
+
+        query: "Send a message to me tomorrow this time of day. Time right now is Monday 12-20-22 13:08."
+        response: {"{"}
+            "time": "Tuesday 12-20-22 13:08",
+            "message": "Hello {username}."
         {"}"}
         END OF EXAMPLE
 
@@ -69,38 +80,50 @@ class Scheduler:
 
         response = await self.call(self.parse_llm, prompt)
 
-        # extract the time and reminder from the response
-        time = response.split('"time": "')[1].split('",')[0].strip()
-        message = response.split('"message": "')[1].split('"')[0].strip()
+        try:
+            # extract the time and reminder from the response
+            time = response.split('"time": "')[1].split('",')[0].strip()
+            message = response.split('"message": "')[1].split('"')[0].strip()
 
-        # convert the time to a datetime object
-        time = datetime.strptime(time, self.date_format)
+            # convert the time to a datetime object
+            time = datetime.strptime(time, self.date_format)
 
-        #
-        # schedule the reminder
-        #
-        self.job_queue.run_once(
-            self.callback,
-            when=time,
-            data=message,
-            chat_id=chat_id,
-            user_id=user_id,
-        )
+            #
+            # schedule the reminder
+            #
+            self.job_queue.run_once(
+                self.callback,
+                when=time,
+                data=message,
+                chat_id=chat_id,
+                user_id=user_id,
+            )
+        except Exception as e:
+            print("Failed to schedule job: ", e)
+            response = await self.call(
+                self.response_llm,
+                f"""Asssistant is a large language model trained by OpenAI. It is helpful at a wide range of tasks.
+                Assistant is designed to schedule reminders on behalf of the user.
+                Assistant failed to schedule a reminder for {username}.
+                
+                Assistant:""",
+            )
+            return response
 
         print(f"Scheduled job for {username} at {time}")
 
         #
         # send a confirmation message to the user
         #
-        prompt = f"""You are a reminder chatbot AI. You are kind and succint.
-        Tell the user that you have scheduled a reminder for them at {time}.
+        prompt = f"""Assistant is a large language model trained by OpenAI.
+
+        Assistant is designed to be helpful at a wide range of tasks. 
+        Assistant can schedule reminders on behalf of the user.
 
         {username}: {text}
-        AI:"""
+        Assistant:"""
 
         await typing()
 
         response = await self.call(self.response_llm, prompt)
         return response
-
-        return "Done"

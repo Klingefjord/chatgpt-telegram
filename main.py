@@ -61,13 +61,7 @@ scheduler = Scheduler(application.job_queue)
 @auth()
 async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send message to OpenAI"""
-    username = update.effective_user.username
-
-    # create a chat instance for the user if not already present
-    if username not in chats:
-        chats[username] = APIChat(username=username, context=context)
-
-    chat = chats[username]
+    chat = get_chat(update)
 
     async def typing():
         await application.bot.send_chat_action(update.effective_chat.id, "typing")
@@ -111,12 +105,7 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 @auth()
 async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Reset the browser instance for the user."""
-    if update.effective_user.username not in chats:
-        return await update.message.reply_text(
-            "You don't have an assistant yet. Use /start to get started."
-        )
-
-    chat = chats[update.effective_user.username]
+    chat = get_chat(update)
 
     async def typing():
         await application.bot.send_chat_action(update.effective_chat.id, "typing")
@@ -133,13 +122,7 @@ async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 @auth()
 async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Schedule an event for the user."""
-
-    if update.effective_user.username not in chats:
-        return await update.message.reply_text(
-            "You don't have an assistant yet. Use /start to get started."
-        )
-
-    chat = chats[update.effective_user.username]
+    chat = get_chat(update)
 
     async def typing():
         await application.bot.send_chat_action(update.effective_chat.id, "typing")
@@ -150,13 +133,23 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id=update.effective_user.id,
         chat_id=update.effective_chat.id,
         typing=typing,
-        chat=chat,
     )
     response = escape_markdown(response, version=2)
 
     await update.message.reply_text(
         response, parse_mode=telegram.constants.ParseMode.MARKDOWN_V2
     )
+
+
+def get_chat(update: Update) -> Chat:
+    """Get the chat instance for the user."""
+    username = update.effective_user.username
+
+    # create a chat instance for the user if not already present
+    if username not in chats:
+        chats[username] = APIChat(username=username, context=None)
+
+    return chats[username]
 
 
 async def error(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
