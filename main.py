@@ -1,16 +1,13 @@
-from asyncio import sleep
-import asyncio
-from datetime import datetime, timedelta
 import os
 import typing
 import pytz
 import telegram
 import logging
 import dotenv
-import nest_asyncio
-from modules.chat import Chat, ChatGPTChat, LangChainChat
+from modules.chats.base import Chat
+from modules.chats.api import APIChat
 from modules.google import Google
-from utils.persistence import clear_history, get_history, persist_message, persistence
+from modules.memory import clear_history
 from modules.schedule import Scheduler
 from utils.auth import auth
 from telegram.helpers import escape_markdown
@@ -20,6 +17,7 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     CommandHandler,
+    PicklePersistence,
     Defaults,
     filters,
 )
@@ -39,12 +37,10 @@ os.environ["TZ"] = "Europe/Berlin"
 application = (
     Application.builder()
     .token(os.environ.get("TELEGRAM_API_KEY"))
-    .persistence(persistence)
+    .persistence(PicklePersistence(filepath="./data/data"))
     .defaults(defaults=Defaults(tzinfo=pytz.timezone(os.environ["TZ"])))
     .build()
 )
-
-job_queue = application.job_queue
 
 # dict of browser instances for each user.
 chats: typing.Dict[str, Chat] = {}
@@ -53,7 +49,7 @@ chats: typing.Dict[str, Chat] = {}
 google = Google(os.getenv("SERP_API_KEY"))
 
 # set up the scheduler
-scheduler = Scheduler(job_queue)
+scheduler = Scheduler(application.job_queue)
 
 
 @auth()
@@ -63,7 +59,7 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # create a chat instance for the user if not already present
     if username not in chats:
-        chats[username] = LangChainChat(username, get_history(context))
+        chats[username] = APIChat(username=username, context=context)
 
     chat = chats[username]
 
@@ -80,9 +76,6 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         response, parse_mode=telegram.constants.ParseMode.MARKDOWN_V2
     )
-
-    # persist the message and response to the chat data
-    persist_message(update, context, response)
 
 
 @auth()
@@ -104,7 +97,7 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         del chats[username]
 
         # create a new chat instance
-        chats[username] = LangChainChat(username)
+        chats[username] = APIChat(context=None, username=username)
 
     await update.message.reply_text("You are ready to start using Lydia. Say hello!")
 
@@ -129,9 +122,6 @@ async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         response, parse_mode=telegram.constants.ParseMode.MARKDOWN_V2
     )
-
-    # persist the message
-    persist_message(update, context, response)
 
 
 @auth()
@@ -161,9 +151,6 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         response, parse_mode=telegram.constants.ParseMode.MARKDOWN_V2
     )
-
-    # persist the message
-    persist_message(update, context, response)
 
 
 async def error(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

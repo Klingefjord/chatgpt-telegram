@@ -1,7 +1,26 @@
 from typing import Any, Dict, List
-from langchain import OpenAI
+from langchain import BasePromptTemplate, LLMChain, OpenAI, PromptTemplate
+from langchain.chains.conversation.prompt import SUMMARY_PROMPT
 from langchain.chains.base import Memory
 from pydantic import BaseModel
+from telegram.ext import ContextTypes, PicklePersistence
+
+# the history of the conversation, stored as a string as per memory.
+CHAT_KEY = "history"
+# the summary of the conversation, stored as a string as per memory.
+SUMMARY_KEY = "summary"
+
+
+async def clear_history(context: ContextTypes.DEFAULT_TYPE):
+    """
+    Clear the chat data.
+    """
+
+    context.chat_data[CHAT_KEY] = ""
+    context.chat_data[SUMMARY_KEY] = ""
+
+    # waits for the db to update
+    await context.refresh_data()
 
 
 def _get_prompt_input_key(inputs: Dict[str, Any], memory_variables: List[str]) -> str:
@@ -15,13 +34,19 @@ def _get_prompt_input_key(inputs: Dict[str, Any], memory_variables: List[str]) -
 
 class AutoSummaryMemory(Memory, BaseModel):
     """
-    A memory that summarizes the conversation when the conversation approaches the token limit.
+    A memory that automatically summarizes the conversation when the buffer is getting too large.
     """
 
-    buffer: str = ""
+    buffer: str
+    summary: str
+
     memory_key: str = "history"  #: :meta private:
-    summary_token_limit: int = 512
-    summary_token_threshold: int = 1024
+    summary_key: str = "summary"  #: :meta private:
+
+    buffer_max_len: int = 512  # how many words before we summarize the conversation.
+    summary_token_limit: int = 256  # how long the summary is allowed to be
+
+    prompt: BasePromptTemplate = SUMMARY_PROMPT
     llm = OpenAI(max_tokens=summary_token_limit)
 
     @property
@@ -30,17 +55,36 @@ class AutoSummaryMemory(Memory, BaseModel):
 
         :meta private:
         """
-        return [self.memory_key]
+        return [self.memory_key, self.summary_key]
+
+    def sync_context(self, context: ContextTypes.DEFAULT_TYPE):
+        """Sync context with memory."""
+        context.chat_data[CHAT_KEY] = self.buffer
+        context.chat_data[SUMMARY_KEY] = self.summary
 
     def load_memory_variables(self, inputs: Dict[str, Any]) -> Dict[str, str]:
-        """Return history buffer."""
-        return {self.memory_key: self.buffer}
+        """Return history and summary."""
+        return {
+            self.memory_key: self.buffer,
+            self.summary_key: self.summary,
+        }
 
     def save_context(self, inputs: Dict[str, Any], outputs: Dict[str, str]) -> None:
         """Save context from this conversation to buffer."""
         prompt_input_key = _get_prompt_input_key(inputs, self.memory_variables)
+
         if len(outputs) != 1:
             raise ValueError(f"One output key expected, got {outputs.keys()}")
+
         human = "Human: " + inputs[prompt_input_key]
         ai = "AI: " + outputs[list(outputs.keys())[0]]
+
+        # add the new lines to the buffer.
         self.buffer += "\n" + "\n".join([human, ai])
+
+        # summarize the temporary buffer if it is too long.
+        if len(self.buffer) > self.buffer_max_len:
+            # summarize the buffer.
+            chain = LLMChain(llm=self.llm, prompt=self.prompt)
+            self.summary = chain.predict(summary=self.summary, new_lines=self.buffer)
+            self.buffer = ""

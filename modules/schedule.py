@@ -11,7 +11,7 @@ from typing import Coroutine
 from langchain import OpenAI
 
 from pydantic import BaseModel
-from modules.chat import Chat
+from modules.chats.base import Chat
 from telegram.ext import CallbackContext
 from telegram.ext import JobQueue
 from telegram.ext import ContextTypes
@@ -56,13 +56,13 @@ class Scheduler:
         prompt = f"""You are an excellent message parser. Parse a message to {username} based on a query.
         The response needs to be a JSON object and contain two keys, "time" and "message".
 
-        Example:
-
+        EXAMPLE
         query: "Remind me to book a dinner for Ellie's birthday on Friday. Time right now is {now}."
         response: {"{"}
             "time": "Friday 12-01-01 19:00",
             "message": "Hi {username}! It's time to book a dinner for Ellie's birthday."
         {"}"}
+        END OF EXAMPLE
 
         query: "{text}. Time right now is {now}."
         response: {"{"}"""

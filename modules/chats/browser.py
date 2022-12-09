@@ -6,6 +6,7 @@ import asyncio
 from anyio import sleep
 from playwright.async_api import async_playwright, ElementHandle
 from typing import Coroutine, List, Tuple
+from telegram import Chat
 from telegram.helpers import escape_markdown
 from langchain import OpenAI, LLMChain, PromptTemplate
 from langchain.chains.conversation.memory import ConversationBufferMemory
@@ -14,17 +15,7 @@ from telegram.ext import ContextTypes
 from modules.memory import AutoSummaryMemory
 
 
-class Chat(ABC):
-    """The interface of a chatbot"""
-
-    @abstractmethod
-    async def send_message(
-        self, message: str, typing: Coroutine = None, **kwargs
-    ) -> str:
-        raise NotImplementedError()
-
-
-class ChatGPTChat(Chat):
+class BrowserChat(Chat):
     """
     ChatGPT API
 
@@ -245,61 +236,3 @@ class ChatGPTChat(Chat):
 
         # return the response
         return await self.__get_response()
-
-
-class LangChainChat(Chat):
-    chain: LLMChain
-    """The LLMChain that is used to generate responses"""
-
-    def __init__(
-        self, username: str, chat_history: List[Tuple[str, str]] = None
-    ) -> None:
-
-        template = f"""You are a chatbot having a conversation with {username}. You try to give as accurate and thruthful answers as possible. 
-        You cannot answer questions that need to know what date it is currently.
-        
-        You are not allowed to browse the internet. You don't knw what date it is. You cannot remind the user or perform actions on her behalf.
-
-        If you don't know the answer, you can ask the human for more information or earnestly tell {username} that you don't know the answer. 
-        If you cannot perform the requested action, clearly state so. If the action needs internet, suggest that the user use the /browse command. If the action requested needs scheduling, suggest the user use /schedule.
-
-        {{chat_history}}
-        {username}: {{human_input}}
-        Chatbot:"""
-
-        prompt = PromptTemplate(
-            input_variables=["chat_history", "human_input"],
-            template=template,
-        )
-
-        # chat_history = context.chat_data.get("chat_history", "")
-
-        memory = AutoSummaryMemory(memory_key="chat_history")
-
-        self.chain = LLMChain(
-            llm=OpenAI(max_tokens=1024),
-            prompt=prompt,
-            verbose=True,
-            memory=memory,
-        )
-
-    async def call(self, message: str) -> str:
-        """Async wrapper around the LLM"""
-        function = partial(self.chain.predict, human_input=message)
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, function)
-
-        return response
-
-    async def send_message(
-        self,
-        message: str,
-        typing: Coroutine = None,
-        context: ContextTypes.DEFAULT_TYPE = None,
-        **kwargs,
-    ):
-        if typing:
-            await typing()
-
-        response = await self.call(message)
-        return response

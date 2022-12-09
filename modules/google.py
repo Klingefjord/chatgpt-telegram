@@ -3,7 +3,7 @@ from serpapi import GoogleSearch
 import json
 import dotenv
 
-from modules.chat import Chat
+from modules.chats.base import Chat
 
 dotenv.load_dotenv()
 
