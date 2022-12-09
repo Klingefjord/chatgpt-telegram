@@ -3,31 +3,41 @@ from serpapi import GoogleSearch
 import json
 import dotenv
 
-from modules.chats.base import Chat
+from modules.chat import Chat
+
+from telegram.ext import ContextTypes
 
 dotenv.load_dotenv()
 
 
 class Google:
+    """Allow the user to Google for answers by exposing the SerpAPI and summarizing the results with a language model."""
+
     def __init__(self, api_key) -> None:
         self.api_key = api_key
 
-    async def google(self, text: str, chat: Chat, typing: Coroutine = None) -> str:
+    async def google(
+        self,
+        text: str,
+        chat: Chat,
+        typing: Coroutine,
+        context: ContextTypes.DEFAULT_TYPE,
+    ) -> str:
         """Get the response from the webpage, summarized by the ChatGPT api"""
 
         if typing:
             await typing()
 
         response = await chat.send_message(
-            f"""
-        If I ask you "{text}" , and you didn't know the answer but had access to google, what would you search for? search query needs to be designed such as to give you as much detail as possible.
-        Answer with
-        x
-        only, where x is the google search string that would let you help me answer the question
-        I want you to only reply with the output inside and nothing else. Do no write explanations or anything else. Just the query
-            """
+            f"""If I ask you "{text}", and you didn't know the answer but had access to google, what would you search for? search query needs to be designed such as to give you as much detail as possible.
+            
+            Answer with x only, where x is the google search string that would let you help me answer the question.
+            I want you to only reply with the output inside and nothing else. Do no write explanations or anything else.
+
+            Query:""",
+            typing=typing,
+            context=context,
         )
-        print(f"Clean response from chatGPT {response}")
 
         # send the google search query to Google:
         if typing:
@@ -47,7 +57,11 @@ class Google:
         {text}
         """
 
-        return await chat.send_message(prompt, typing=typing)
+        return await chat.send_message(
+            prompt,
+            context=context,
+            typing=typing,
+        )
 
     def __google_search(self, query):
         """Perform the google search using SerpAPI"""

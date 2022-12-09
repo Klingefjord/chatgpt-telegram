@@ -5,13 +5,11 @@ dotenv.load_dotenv()
 
 import os
 import typing
-from langchain import OpenAI
 import pytz
 import telegram
 import logging
 import dotenv
-from modules.chats.base import Chat
-from modules.chats.api import APIChat
+from modules.chat import Chat
 from modules.google import Google
 from modules.memory import clear_history
 from modules.schedule import Scheduler
@@ -67,6 +65,7 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     response = await chat.send_message(
         update.message.text, typing=typing, context=context
     )
+
     response = escape_markdown(response, version=2)
 
     # send the response to the user
@@ -96,7 +95,7 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         del chats[username]
 
         # create a new chat instance
-        chats[username] = APIChat(context=None, username=username)
+        chats[username] = Chat(context=None)
 
     await update.message.reply_text(
         "You are ready to start using Assistant. Say hello!"
@@ -111,8 +110,13 @@ async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     async def typing():
         await application.bot.send_chat_action(update.effective_chat.id, "typing")
 
-    text = update.message.text.replace("/browse", "").strip()
-    response = await google.google(text, chat=chat, typing=typing)
+    response = await google.google(
+        update.message.text.replace("/browse", "").strip(),
+        chat=chat,
+        typing=typing,
+        context=context,
+    )
+
     response = escape_markdown(response, version=2)
 
     await update.message.reply_text(
@@ -123,7 +127,6 @@ async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 @auth()
 async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Schedule an event for the user."""
-    chat = get_chat(update)
 
     async def typing():
         await application.bot.send_chat_action(update.effective_chat.id, "typing")
@@ -135,6 +138,7 @@ async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chat_id=update.effective_chat.id,
         typing=typing,
     )
+
     response = escape_markdown(response, version=2)
 
     await update.message.reply_text(
@@ -148,7 +152,7 @@ def get_chat(update: Update) -> Chat:
 
     # create a chat instance for the user if not already present
     if username not in chats:
-        chats[username] = APIChat(username=username, context=None)
+        chats[username] = Chat()
 
     return chats[username]
 

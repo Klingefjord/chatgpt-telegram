@@ -1,18 +1,16 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import partial
 from typing import Coroutine
 from langchain import OpenAI
-
-from pydantic import BaseModel
-from modules.chats.base import Chat
 from telegram.ext import CallbackContext
 from telegram.ext import JobQueue
-from telegram.ext import ContextTypes
 
 
 class Scheduler:
-    """Singleton class for scheduling reminders"""
+    """Schedule reminders for the user by extracting time and date and adding a task to the JobQueue.
+
+    Unfortunately, reminders are not persisted across restarts."""
 
     def __init__(self, job_queue: JobQueue) -> None:
         self.date_format = "%A %m-%d-%y %H:%M"

@@ -32,7 +32,7 @@ def _get_prompt_input_key(inputs: Dict[str, Any], memory_variables: List[str]) -
     return prompt_input_keys[0]
 
 
-class AutoSummaryMemory(Memory, BaseModel):
+class AutoSummaryMemory(Memory):
     """
     A memory that automatically summarizes the conversation when the buffer is getting too large.
     """

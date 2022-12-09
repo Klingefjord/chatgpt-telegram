@@ -1,27 +1,19 @@
-from abc import ABC, abstractmethod
 from functools import partial
-import os
-import time
 import asyncio
-from anyio import sleep
+from typing import Coroutine
 from langchain import LLMChain, OpenAI, PromptTemplate
-from playwright.async_api import async_playwright, ElementHandle
-from typing import Coroutine, List, Tuple
-from telegram import Chat
-from telegram.helpers import escape_markdown
+from pydantic import BaseModel
 from telegram.ext import ContextTypes
 from modules.memory import CHAT_KEY, SUMMARY_KEY, AutoSummaryMemory
 
 
-class APIChat(Chat):
-    chain: LLMChain
-    """The LLMChain that is used to generate responses"""
+class Chat:
+    """A chat with a user
 
-    def __init__(
-        self,
-        username: str,
-        context: ContextTypes.DEFAULT_TYPE = None,
-    ) -> None:
+    The chat history is saved in the chat memory.
+    """
+
+    def __init__(self, context: ContextTypes.DEFAULT_TYPE = None) -> None:
         template = f"""
 Assistant is a large language model trained by OpenAI on data up until 2021.
 Assistant is designed to be able to assist with a wide range of tasks, from answering simple questions to providing in-depth explanations and discussions on a wide range of topics. As a language model, Assistant is able to generate human-like text based on the input it receives, allowing it to engage in natural-sounding conversations and provide responses that are coherent and relevant to the topic at hand.
@@ -78,9 +70,8 @@ Assistant:"""
     async def send_message(
         self,
         message: str,
-        typing: Coroutine = None,
-        context: ContextTypes.DEFAULT_TYPE = None,
-        **kwargs,
+        context: ContextTypes.DEFAULT_TYPE,
+        typing: Coroutine,
     ):
         if typing:
             await typing()
