@@ -3,13 +3,14 @@ import asyncio
 from datetime import datetime, timedelta
 import os
 import typing
+import pytz
 import telegram
 import logging
 import dotenv
 import nest_asyncio
 from modules.chat import Chat, ChatGPTChat, LangChainChat
 from modules.google import Google
-from utils.persistence import clear_history, persist_message, persistence
+from utils.persistence import clear_history, get_history, persist_message, persistence
 from modules.schedule import Scheduler
 from utils.auth import auth
 from telegram.helpers import escape_markdown
@@ -19,40 +20,9 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     CommandHandler,
+    Defaults,
     filters,
 )
-
-
-# from telegram.ext import Updater
-
-# DB_URI = "postgresql://botuser:@localhost:5432/botdb"
-
-# updater = Updater("TOKEN")
-# dispatcher = updater.dispatcher
-# dispatcher.job_queue.scheduler.add_jobstore(
-#     PTBSQLAlchemyJobStore(
-#         dispatcher=dispatcher,
-#         url=DB_URI,
-#     ),
-# )
-
-# from telegram.ext import Updater
-# from ptbcontrib.ptb_sqlalchemy_jobstore import PTBSQLAlchemyJobStore
-
-# DB_URI = "postgresql://botuser:@localhost:5432/botdb"
-
-# updater = Updater("TOKEN")
-# dispatcher = updater.dispatcher
-# dispatcher.job_queue.scheduler.add_jobstore(
-#     PTBSQLAlchemyJobStore(
-#         dispatcher=dispatcher,
-#         url=DB_URI,
-#     ),
-# )
-
-# updater.start_polling()
-# updater.idle()
-
 
 # setup
 dotenv.load_dotenv()
@@ -70,8 +40,10 @@ application = (
     Application.builder()
     .token(os.environ.get("TELEGRAM_API_KEY"))
     .persistence(persistence)
+    .defaults(defaults=Defaults(tzinfo=pytz.timezone(os.environ["TZ"])))
     .build()
 )
+
 job_queue = application.job_queue
 
 # dict of browser instances for each user.
@@ -87,13 +59,13 @@ scheduler = Scheduler(job_queue)
 @auth()
 async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send message to OpenAI"""
+    username = update.effective_user.username
 
-    # get the user's browser instance, or create one if it doesn't exist
-    if update.effective_user.username not in chats:
-        await update.message.reply_text("Hang on, setting up your assistant...")
-        await create_chat(update.effective_user.username)
+    # create a chat instance for the user if not already present
+    if username not in chats:
+        chats[username] = LangChainChat(username, get_history(context))
 
-    chat = chats[update.effective_user.username]
+    chat = chats[username]
 
     async def typing():
         await application.bot.send_chat_action(update.effective_chat.id, "typing")
@@ -116,33 +88,25 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 @auth()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
-
-    if update.effective_user.username in chats:
-        await update.message.reply_text(
-            "You already have an assistant. Use /reset to reset your assistant."
-        )
-        return
-
-    await create_chat(update.effective_user.username)
     await update.message.reply_text("You are ready to start using Lydia. Say hello!")
 
 
 @auth()
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Reset the browser instance for the user."""
+    username = update.effective_user.username
 
-    if update.effective_user.username in chats:
+    if username in chats:
         await update.message.reply_text("Resetting your assistant...")
-        await create_chat(update.effective_user.username)
-        await update.message.reply_text(
-            "You are ready to start using Lydia. Say hello!"
-        )
-    else:
-        await update.message.reply_text(
-            "You don't have an assistant yet. Use /start to get started."
-        )
 
-    clear_history(context)
+        # clear the chat instance and history
+        await clear_history(context)
+        del chats[username]
+
+        # create a new chat instance
+        chats[username] = LangChainChat(username)
+
+    await update.message.reply_text("You are ready to start using Lydia. Say hello!")
 
 
 @auth()
@@ -159,7 +123,7 @@ async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await application.bot.send_chat_action(update.effective_chat.id, "typing")
 
     text = update.message.text.replace("/browse", "").strip()
-    response = await google.google(text, chat=chat, typing_action=typing)
+    response = await google.google(text, chat=chat, typing=typing)
     response = escape_markdown(response, version=2)
 
     await update.message.reply_text(
@@ -208,55 +172,6 @@ async def error(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.warning('Error "%s"', context.error)
 
 
-async def create_chat(username: str) -> Chat:
-    use_langchain = os.getenv("LANGCHAIN", "False") == "True"
-
-    if use_langchain:
-        return await create_langchain_chat(username)
-    else:
-        return await create_chatgpt_chat(username)
-
-
-async def create_langchain_chat(username: str) -> LangChainChat:
-    """Create a langchain representation of a user conversation"""
-
-    if username in chats:
-        return chats[username]
-
-    chats[username] = LangChainChat(username)
-    return chats[username]
-
-
-async def create_chatgpt_chat(username: str) -> ChatGPTChat:
-    """Create a browser wrapper for a user conversation"""
-
-    print(f"Starting browser for {username}...")
-
-    chat = Chat(
-        openai_username=os.getenv("OPEN_AI_USERNAME"),
-        openai_password=os.getenv("OPEN_AI_PASSWORD"),
-    )
-
-    # log in the user to the chatGPT webpage
-    await chat.connect(user_data_dir=f"/tmp/playwright_{username}")
-    await chat.login()
-
-    print(f"Successfully started browser for {username}.")
-
-    # cache the browser
-    chats[username] = chat
-    return chat
-
-
-async def setup_chats():
-    for user in os.getenv("ALLOWED_USERS").split(","):
-        try:
-            await create_langchain_chat(user)
-        except Exception as e:
-            print(f"Error starting browser for {user}: {e}")
-            continue
-
-
 def main():
     # Handle messages
     application.add_handler(
@@ -267,10 +182,6 @@ def main():
     application.add_handler(CommandHandler("schedule", schedule))
     application.add_handler(CommandHandler("browse", browse))
     application.add_error_handler(error)
-
-    # prepare browsers
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(setup_chats())
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()

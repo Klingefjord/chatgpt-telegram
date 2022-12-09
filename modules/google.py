@@ -12,37 +12,11 @@ class Google:
     def __init__(self, api_key) -> None:
         self.api_key = api_key
 
-    def needs_google(self, text: str) -> bool:
-        """Check if the response needs browsing by looking at keywords in the model"""
-
-        text = text.lower()
-
-        cue_count = 0
-        if "i'm sorry" in text:
-            cue_count += 1
-
-        if "training data":
-            cue_count += 1
-
-        if "the internet":
-            cue_count += 1
-
-        if "the web":
-            cue_count += 1
-
-        if cue_count >= 2:
-            print(f"Looks like prompt needs a web search:\n\n{text}")
-            return True
-
-        return False
-
-    async def google(
-        self, text: str, chat: Chat, typing_action: Coroutine = None
-    ) -> str:
+    async def google(self, text: str, chat: Chat, typing: Coroutine = None) -> str:
         """Get the response from the webpage, summarized by the ChatGPT api"""
 
-        if typing_action:
-            await typing_action()
+        if typing:
+            await typing()
 
         response = await chat.send_message(
             f"""
@@ -56,8 +30,8 @@ class Google:
         print(f"Clean response from chatGPT {response}")
 
         # send the google search query to Google:
-        if typing_action:
-            await typing_action()
+        if typing:
+            await typing()
 
         # search google for the query
         results = self.__google_search(response)
@@ -73,7 +47,7 @@ class Google:
         {text}
         """
 
-        return await chat.send_message(prompt, typing_action=typing_action)
+        return await chat.send_message(prompt, typing=typing)
 
     def __google_search(self, query):
         """Perform the google search using SerpAPI"""

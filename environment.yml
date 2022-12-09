@@ -6,7 +6,6 @@ dependencies:
       - playwright
       - python-dotenv
       - python-telegram-bot==20.0a6
-      - python-telegram-bot[job-queue]
       - requests
       - google-search-results
       - git+https://github.com/python-telegram-bot/ptbcontrib.git@main

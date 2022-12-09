@@ -5,10 +5,13 @@ import time
 import asyncio
 from anyio import sleep
 from playwright.async_api import async_playwright, ElementHandle
-from typing import Coroutine
+from typing import Coroutine, List, Tuple
 from telegram.helpers import escape_markdown
 from langchain import OpenAI, LLMChain, PromptTemplate
 from langchain.chains.conversation.memory import ConversationBufferMemory
+from telegram.ext import ContextTypes
+
+from modules.memory import AutoSummaryMemory
 
 
 class Chat(ABC):
@@ -197,7 +200,7 @@ class ChatGPTChat(Chat):
         Send a message to the webpage.
 
         message: the message to send
-        typing_action: a coroutine that will be executed while the bot is typing every poll.
+        typing: a coroutine that will be executed while the bot is typing every poll.
         poll_interval: how often to poll the webpage for a response in seconds.
         timeout: how long to wait for a response before giving up in seconds.
         """
@@ -248,9 +251,12 @@ class LangChainChat(Chat):
     chain: LLMChain
     """The LLMChain that is used to generate responses"""
 
-    def __init__(self, username: str, chat_history: str = None) -> None:
+    def __init__(
+        self, username: str, chat_history: List[Tuple[str, str]] = None
+    ) -> None:
+
         template = f"""You are a chatbot having a conversation with {username}. You try to give as accurate and thruthful answers as possible. 
-        You cannot answer questions that need to know what date it is currently. 
+        You cannot answer questions that need to know what date it is currently.
         
         You are not allowed to browse the internet. You don't knw what date it is. You cannot remind the user or perform actions on her behalf.
 
@@ -266,7 +272,9 @@ class LangChainChat(Chat):
             template=template,
         )
 
-        memory = ConversationBufferMemory(memory_key="chat_history", buffer="")
+        # chat_history = context.chat_data.get("chat_history", "")
+
+        memory = AutoSummaryMemory(memory_key="chat_history")
 
         self.chain = LLMChain(
             llm=OpenAI(max_tokens=1024),
@@ -287,8 +295,11 @@ class LangChainChat(Chat):
         self,
         message: str,
         typing: Coroutine = None,
+        context: ContextTypes.DEFAULT_TYPE = None,
         **kwargs,
     ):
-        await typing()
+        if typing:
+            await typing()
+
         response = await self.call(message)
         return response

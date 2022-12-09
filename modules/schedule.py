@@ -92,9 +92,9 @@ class Scheduler:
         #
         # send a confirmation message to the user
         #
-        prompt = f"""You are a reminder chatbot AI. You are kind and succint. 
+        prompt = f"""You are a reminder chatbot AI. You are kind and succint.
         Tell the user that you have scheduled a reminder for them at {time}.
-    
+
         {username}: {text}
         AI:"""
 
@@ -102,3 +102,5 @@ class Scheduler:
 
         response = await self.call(self.response_llm, prompt)
         return response
+
+        return "Done"
