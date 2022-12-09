@@ -1,6 +1,11 @@
+import dotenv
+
+# Prepare the environment
+dotenv.load_dotenv()
+
 import os
 import typing
-import openai
+from langchain import OpenAI
 import pytz
 import telegram
 import logging
@@ -23,11 +28,8 @@ from telegram.ext import (
     filters,
 )
 
-# setup
-dotenv.load_dotenv()
-
 # set the OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+print(os.getenv("OPENAI_API_KEY"))
 
 # logging
 logging.basicConfig(
