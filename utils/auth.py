@@ -4,7 +4,7 @@ import os
 
 dotenv.load_dotenv()
 
-allowed_users = os.getenv("ALLOWED_USERS").split(",")
+allowed_chat_ids = os.getenv("ALLOWED_CHAT_IDS").split(",")
 
 
 def auth():
@@ -13,7 +13,7 @@ def auth():
     def decorator(func: callable):
         @wraps(func)
         async def wrapper(update, context):
-            if update.effective_user.username in allowed_users:
+            if str(update.message.chat_id) in allowed_chat_ids:
                 await func(update, context)
             else:
                 await update.message.reply_text(
